@@ -1,0 +1,6 @@
+{
+  "name": "BoostNet Donor",
+  "description": "Native Android cellular data routing node and SOCKS5 multipath proxy for student connection pooling",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
