@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -53,7 +54,8 @@ fun PairingDialog(
     config: DonorConfig,
     secret: String,
     onDismiss: () -> Unit,
-    onRegenerateSecret: () -> Unit
+    onRegenerateSecret: () -> Unit,
+    onOpenScanner: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val pairingCode = CryptoManager.getPairingCode(secret)
@@ -134,7 +136,23 @@ fun PairingDialog(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Button(
+                    onClick = {
+                        onDismiss()
+                        onOpenScanner()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = GoogleBluePrimary),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Scan Laptop QR (Recommended)", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

@@ -46,6 +46,54 @@ object CryptoManager {
         return secret
     }
 
+    private const val KEY_IS_PAIRED = "is_paired"
+
+    fun isPaired(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_IS_PAIRED, false)
+    }
+
+    fun savePairedSecret(context: Context, secret: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(KEY_SESSION_SECRET, secret.trim())
+            .putBoolean(KEY_IS_PAIRED, true)
+            .apply()
+    }
+
+    fun unpair(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean(KEY_IS_PAIRED, false)
+            .apply()
+        // Generate a new fresh local secret so previous paired laptops can't reconnect
+        generateNewSecret(context)
+    }
+
+    fun parseLaptopQrPayload(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                val json = org.json.JSONObject(trimmed)
+                if (json.has("secret")) {
+                    return json.getString("secret")
+                }
+            } catch (_: Exception) {}
+        }
+        // Direct base64 secret (at least 16 chars)
+        if (trimmed.length >= 16) {
+            return trimmed
+        }
+        return null
+    }
+
+    fun getVisualVerificationCode(secret: String): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val hash = md.digest(secret.toByteArray(StandardCharsets.UTF_8))
+        val num = ((hash[0].toInt() and 0xFF) * 256 + (hash[1].toInt() and 0xFF)) % 90 + 10
+        return "%02d".format(num)
+    }
+
     fun getPairingCode(secret: String): String {
         val md = MessageDigest.getInstance("SHA-256")
         val hash = md.digest(secret.toByteArray(StandardCharsets.UTF_8))

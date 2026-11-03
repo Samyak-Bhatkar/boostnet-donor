@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.crypto.CryptoManager
 import com.example.model.DonorConfig
 import com.example.ui.theme.DarkSurfaceElevated
 import com.example.ui.theme.DarkSurfaceVariant
@@ -164,7 +165,25 @@ fun SettingsSheet(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val isPaired = CryptoManager.isPaired(context)
+                if (isPaired) {
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = {
+                            CryptoManager.unpair(context)
+                            android.widget.Toast.makeText(context, "Unpaired from laptop", android.widget.Toast.LENGTH_SHORT).show()
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                            contentColor = com.example.ui.theme.GoogleRed
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Unpair Laptop", color = com.example.ui.theme.GoogleRed, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 // Action Buttons
                 Row(

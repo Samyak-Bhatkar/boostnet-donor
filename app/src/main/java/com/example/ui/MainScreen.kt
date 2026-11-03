@@ -37,6 +37,7 @@ fun MainScreen(viewModel: BoostNetViewModel) {
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
     var showPairingDialog by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
 
     val donorState by viewModel.donorState.collectAsState()
@@ -118,7 +119,21 @@ fun MainScreen(viewModel: BoostNetViewModel) {
                     config = donorConfig,
                     secret = sessionSecret,
                     onDismiss = { showPairingDialog = false },
-                    onRegenerateSecret = { viewModel.regeneratePairingSecret() }
+                    onRegenerateSecret = { viewModel.regeneratePairingSecret() },
+                    onOpenScanner = {
+                        showPairingDialog = false
+                        showScanner = true
+                    }
+                )
+            }
+
+            if (showScanner) {
+                PairingScannerScreen(
+                    onDismiss = { showScanner = false },
+                    onPairedSuccess = { newSecret, _ ->
+                        viewModel.regeneratePairingSecret()
+                        showScanner = false
+                    }
                 )
             }
 

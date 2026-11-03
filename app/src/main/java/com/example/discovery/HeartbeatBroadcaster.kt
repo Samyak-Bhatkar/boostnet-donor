@@ -76,9 +76,13 @@ class HeartbeatBroadcaster(
             val ctrlPort = getCtrlPort()
             val broadcastPort = getBroadcastPort()
 
-            // HMAC payload
-            val messageToSign = "1|$nodeId|$seq|$socksPort|$ctrlPort|${state.name}"
-            val hmac = CryptoManager.hmacSha256(discoveryKey, messageToSign)
+            val isPaired = CryptoManager.isPaired(context)
+            val hmac = if (isPaired) {
+                val messageToSign = "1|$nodeId|$seq|$socksPort|$ctrlPort|${state.name}"
+                CryptoManager.hmacSha256(discoveryKey, messageToSign)
+            } else {
+                "available_to_pair"
+            }
 
             val payload = JSONObject().apply {
                 put("v", 1)
@@ -88,6 +92,8 @@ class HeartbeatBroadcaster(
                 put("port", socksPort)
                 put("ctrlPort", ctrlPort)
                 put("state", state.name)
+                put("paired", isPaired)
+                put("status", if (isPaired) "paired" else "available_to_pair")
                 put("hmac", hmac)
                 put("ts", System.currentTimeMillis())
             }.toString()
