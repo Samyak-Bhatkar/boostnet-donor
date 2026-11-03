@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -63,11 +65,19 @@ func main() {
 		log.Fatalf("Failed to start local proxy on 127.0.0.1:8080: %v", err)
 	}
 
-	// 5. Initialize Download Accelerator & Browser Extension IPC (:10801)
+	// 5. Initialize Web Dashboard, Download Accelerator & Browser Extension IPC (:10801)
 	dl := downloader.New(pool)
-	ipcSrv := ipc.New(dl, session.MasterSecret[:16])
+	ipcSrv := ipc.New(dl, session, pool)
 	if err := ipcSrv.Start(10801); err != nil {
-		log.Printf("[Warning] Extension IPC start warning: %v", err)
+		log.Printf("[Warning] Dashboard/IPC start warning: %v", err)
+	} else {
+		log.Println("[Dashboard] Visual QR Dashboard active at: http://127.0.0.1:10801/")
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			if runtime.GOOS == "windows" {
+				_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", "http://127.0.0.1:10801/").Start()
+			}
+		}()
 	}
 
 	// 6. Enable Windows system proxy
