@@ -10,6 +10,7 @@ import com.example.model.TelemetryStats
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -20,10 +21,10 @@ import java.net.Socket
 
 class BoostNetRepository(private val context: Context) {
 
-    private val _donorState = MutableStateFlow(DonorState.STOPPED)
-    val donorState = _donorState.asStateFlow()
+    private val _donorState: MutableStateFlow<DonorState> = MutableStateFlow(DonorState.STOPPED)
+    val donorState: StateFlow<DonorState> = _donorState.asStateFlow()
 
-    private val _donorConfig = MutableStateFlow(
+    private val _donorConfig: MutableStateFlow<DonorConfig> = MutableStateFlow(
         DonorConfig(
             nodeId = CryptoManager.getOrCreateNodeId(context),
             displayName = "Pixel 8 Pro (Donor)",
@@ -32,19 +33,19 @@ class BoostNetRepository(private val context: Context) {
             quotaLimitBytes = 2L * 1024 * 1024 * 1024 // 2 GB
         )
     )
-    val donorConfig = _donorConfig.asStateFlow()
+    val donorConfig: StateFlow<DonorConfig> = _donorConfig.asStateFlow()
 
-    private val _telemetryStats = MutableStateFlow(TelemetryStats())
-    val telemetryStats = _telemetryStats.asStateFlow()
+    private val _telemetryStats: MutableStateFlow<TelemetryStats> = MutableStateFlow(TelemetryStats())
+    val telemetryStats: StateFlow<TelemetryStats> = _telemetryStats.asStateFlow()
 
-    private val _logEntries = MutableStateFlow<List<LogEntry>>(emptyList())
-    val logEntries = _logEntries.asStateFlow()
+    private val _logEntries: MutableStateFlow<List<LogEntry>> = MutableStateFlow(emptyList())
+    val logEntries: StateFlow<List<LogEntry>> = _logEntries.asStateFlow()
 
-    private val _sessionSecret = MutableStateFlow(CryptoManager.getOrCreateSessionSecret(context))
-    val sessionSecret = _sessionSecret.asStateFlow()
+    private val _sessionSecret: MutableStateFlow<String> = MutableStateFlow(CryptoManager.getOrCreateSessionSecret(context))
+    val sessionSecret: StateFlow<String> = _sessionSecret.asStateFlow()
 
-    private val _isPaired = MutableStateFlow(CryptoManager.isPaired(context))
-    val isPaired = _isPaired.asStateFlow()
+    private val _isPaired: MutableStateFlow<Boolean> = MutableStateFlow(CryptoManager.isPaired(context))
+    val isPaired: StateFlow<Boolean> = _isPaired.asStateFlow()
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
