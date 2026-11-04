@@ -16,3 +16,5 @@ debug.keystore
 debug.keystore.base64
 
 *.exe
+
+*.apk
