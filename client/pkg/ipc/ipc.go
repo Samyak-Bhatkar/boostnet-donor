@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"boostnet-client/pkg/discovery"
+	"boostnet-client/pkg/diagnostics"
 	"boostnet-client/pkg/downloader"
 	"boostnet-client/pkg/pairing"
 )
@@ -28,11 +29,12 @@ type Server struct {
 	dl        *downloader.Downloader
 	session   *pairing.Session
 	pool      *discovery.Pool
+	diagEngine *diagnostics.Engine
 	authToken string
 	server    *http.Server
 }
 
-func New(dl *downloader.Downloader, session *pairing.Session, pool *discovery.Pool) *Server {
+func New(dl *downloader.Downloader, session *pairing.Session, pool *discovery.Pool, diagEngine *diagnostics.Engine) *Server {
 	authToken := ""
 	if session != nil && len(session.MasterSecret) >= 16 {
 		authToken = session.MasterSecret[:16]
@@ -41,6 +43,7 @@ func New(dl *downloader.Downloader, session *pairing.Session, pool *discovery.Po
 		dl:        dl,
 		session:   session,
 		pool:      pool,
+		diagEngine: diagEngine,
 		authToken: authToken,
 	}
 }
@@ -51,6 +54,7 @@ func (s *Server) Start(port int) error {
 	mux.HandleFunc("/rpc/download", s.handleDownload)
 	mux.HandleFunc("/rpc/status", s.handleStatus)
 	mux.HandleFunc("/rpc/donors", s.handleDonors)
+	mux.HandleFunc("/rpc/diagnose", s.handleDiagnose)
 
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf("127.0.0.1:%d", port),
@@ -278,4 +282,16 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 </script>
 </body>
 </html>`, pin, confirmCode, payload, payload)
+}
+
+func (s *Server) handleDiagnose(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.diagEngine != nil {
+		jsonStr, err := s.diagEngine.DiagnoseJSON()
+		if err == nil {
+			_, _ = w.Write([]byte(jsonStr))
+			return
+		}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "diagnostics unavailable"})
 }

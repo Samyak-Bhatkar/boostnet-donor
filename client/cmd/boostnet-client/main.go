@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"log"
 	"os"
 	"os/exec"
@@ -12,6 +15,7 @@ import (
 	"time"
 
 	"boostnet-client/pkg/balancer"
+	"boostnet-client/pkg/diagnostics"
 	"boostnet-client/pkg/discovery"
 	"boostnet-client/pkg/downloader"
 	"boostnet-client/pkg/ipc"
@@ -21,6 +25,30 @@ import (
 )
 
 func main() {
+	// Check for CLI diagnose flag
+	if len(os.Args) > 1 && (os.Args[1] == "diagnose" || os.Args[1] == "--diagnose-live" || os.Args[1] == "-d") {
+		resp, err := http.Get("http://127.0.0.1:10801/rpc/diagnose")
+		if err == nil {
+			defer resp.Body.Close()
+			body, _ := io.ReadAll(resp.Body)
+			fmt.Println(string(body))
+			os.Exit(0)
+		}
+
+		recorder, rErr := diagnostics.NewFlightRecorder("")
+		if rErr == nil {
+			recs, _ := recorder.ReadLastRecords(10)
+			summary := map[string]interface{}{
+				"status":  "live client not responding, displaying last flight recorder records",
+				"records": recs,
+			}
+			out, _ := json.MarshalIndent(summary, "", "  ")
+			fmt.Println(string(out))
+			os.Exit(0)
+		}
+		log.Fatalf("No active BoostNet client running and no flight logs found.")
+	}
+
 	log.Println("==================================================")
 	log.Println("     BoostNet 2.0 - Multipath Laptop Client       ")
 	log.Println("==================================================")
@@ -66,8 +94,12 @@ func main() {
 	}
 
 	// 5. Initialize Web Dashboard, Download Accelerator & Browser Extension IPC (:10801)
+	diagEngine, dErr := diagnostics.NewEngine(pool, session.ControlKey())
+	if dErr != nil {
+		log.Printf("[Warning] Diagnostic oracle failed to start: %v", dErr)
+	}
 	dl := downloader.New(pool, session.MasterSecret)
-	ipcSrv := ipc.New(dl, session, pool)
+	ipcSrv := ipc.New(dl, session, pool, diagEngine)
 	if err := ipcSrv.Start(10801); err != nil {
 		log.Printf("[Warning] Dashboard/IPC start warning: %v", err)
 	} else {
@@ -122,6 +154,7 @@ func main() {
 	// Restore Windows system proxy on clean exit
 	_ = sysproxy.DisableProxy()
 	proxySrv.Stop()
+	if diagEngine != nil { diagEngine.Stop() }
 	ipcSrv.Stop()
 	pool.Stop()
 

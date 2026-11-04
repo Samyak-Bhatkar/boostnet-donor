@@ -9,6 +9,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import android.os.SystemClock
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -26,6 +28,7 @@ class ControlChannelServer(
     private val getSessionSecret: () -> String,
     private val getCurrentState: () -> DonorState,
     private val getTelemetryStats: () -> TelemetryStats,
+    private val getGroundTruth: () -> JSONObject = { JSONObject() },
     private val onCommandReceived: (String) -> Unit,
     private val onStateTransition: (DonorState, String) -> Unit,
     private val onLog: (String, String) -> Unit
@@ -42,6 +45,31 @@ class ControlChannelServer(
     private val clientWriters = ConcurrentHashMap<Socket, PrintWriter>()
 
     private var drainedByWatchdog = false
+
+    data class BufferedEvent(
+        val seq: Long,
+        val type: String,
+        val monoNs: Long,
+        val payload: JSONObject
+    )
+
+    private val eventRingBuffer = Collections.synchronizedList(ArrayList<BufferedEvent>())
+
+    fun recordEvent(type: String, payload: JSONObject) {
+        val ev = BufferedEvent(
+            seq = telemetrySeq.incrementAndGet(),
+            type = type,
+            monoNs = SystemClock.elapsedRealtimeNanos(),
+            payload = payload
+        )
+        synchronized(eventRingBuffer) {
+            if (eventRingBuffer.size >= 50) {
+                eventRingBuffer.removeAt(0)
+            }
+            eventRingBuffer.add(ev)
+        }
+    }
+
 
     @Synchronized
     fun start(bindAddress: InetAddress, port: Int = 9998) {
@@ -187,7 +215,24 @@ class ControlChannelServer(
                             writer.println("OK DRAIN")
                         }
                         trimmed.startsWith("PING", ignoreCase = true) -> {
-                            writer.println("PONG ${System.currentTimeMillis()}")
+                            val parts = trimmed.split(" ")
+                            val clientMono = if (parts.size > 1) parts[1] else "0"
+                            val phoneMono = SystemClock.elapsedRealtimeNanos()
+                            writer.println("PONG $clientMono $phoneMono")
+                        }
+                        trimmed.equals("GET_BUFFERED_EVENTS", ignoreCase = true) -> {
+                            val arr = JSONArray()
+                            synchronized(eventRingBuffer) {
+                                for (ev in eventRingBuffer) {
+                                    arr.put(JSONObject().apply {
+                                        put("seq", ev.seq)
+                                        put("type", ev.type)
+                                        put("mono_ns", ev.monoNs)
+                                        put("payload", ev.payload)
+                                    })
+                                }
+                            }
+                            writer.println("EVENTS $arr")
                         }
                         else -> {
                             writer.println("ERR_UNKNOWN_CMD")
@@ -251,6 +296,8 @@ class ControlChannelServer(
                     put("activeConns", stats.activeConnections)
                     put("rttMs", stats.cellularRttMs)
                     put("ts", System.currentTimeMillis())
+                    put("phone_mono_ns", SystemClock.elapsedRealtimeNanos())
+                    put("ground_truth", getGroundTruth())
                 }.toString()
 
                 for ((_, writer) in clientWriters) {

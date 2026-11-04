@@ -1,6 +1,7 @@
 package com.example.proxy
 
 import com.example.crypto.CryptoManager
+import com.example.telemetry.GroundTruthCollector
 import com.example.model.DonorState
 import com.example.network.CellularNetworkBinder
 import com.example.network.SsrfFilter
@@ -30,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class Socks5ProxyServer(
     private val cellularBinder: CellularNetworkBinder,
     private val quotaManager: QuotaManager,
+    private val groundTruthCollector: GroundTruthCollector? = null,
     private val getSessionSecret: () -> String,
     private val getCurrentState: () -> DonorState,
     private val getBlocklist: () -> List<String>,
@@ -38,6 +40,7 @@ class Socks5ProxyServer(
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO)
+    private val streamCounter = java.util.concurrent.atomic.AtomicLong(0L)
 
     val activeConnections = AtomicInteger(0)
     val maxConcurrency = 32
@@ -119,6 +122,7 @@ class Socks5ProxyServer(
 
         scope.launch {
             var remoteSocket: Socket? = null
+            val streamId = streamCounter.incrementAndGet()
             try {
                 clientSocket.tcpNoDelay = true
                 clientSocket.keepAlive = true
@@ -310,6 +314,7 @@ class Socks5ProxyServer(
                 if (!connected || remoteSocket == null) {
                     if (connectError != null) {
                         cellularBinder.recordConnectionFailure(connectError)
+                        groundTruthCollector?.recordError(streamId, connectError)
                     }
                     onLog("Socks5Server", "Failed to connect to ${targetDomain ?: safeAddresses.first()}:$targetPort via cellular: ${connectError?.message}")
                     sendSocksReply(clientOut, 0x05.toByte()) // 0x05 = Connection refused

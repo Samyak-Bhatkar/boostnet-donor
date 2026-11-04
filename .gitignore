@@ -20,3 +20,6 @@ debug.keystore.base64
 *.apk
 session.json
 *.exe~
+client/logs/
+*.log
+*.jsonl

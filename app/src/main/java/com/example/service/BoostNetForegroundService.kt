@@ -83,6 +83,8 @@ class BoostNetForegroundService : Service() {
             onLog = { tag, msg -> repository.addLog(tag, msg, LogLevel.INFO) }
         )
 
+        val groundTruthCollector = GroundTruthCollector(applicationContext)
+
         cellularBinder = CellularNetworkBinder(
             context = applicationContext,
             onStateTransition = { newState, reason -> handleStateTransition(newState, reason) },
@@ -93,6 +95,7 @@ class BoostNetForegroundService : Service() {
         socksProxyServer = Socks5ProxyServer(
             cellularBinder = cellularBinder,
             quotaManager = quotaManager,
+            groundTruthCollector = groundTruthCollector,
             getSessionSecret = { repository.sessionSecret.value },
             getCurrentState = { repository.donorState.value },
             getBlocklist = { repository.donorConfig.value.blocklist },
@@ -103,6 +106,7 @@ class BoostNetForegroundService : Service() {
             getSessionSecret = { repository.sessionSecret.value },
             getCurrentState = { repository.donorState.value },
             getTelemetryStats = { repository.telemetryStats.value },
+            getGroundTruth = { groundTruthCollector.snapshot(cellularBinder.activeCellularNetwork.get()) },
             onCommandReceived = { cmd -> handleControlCommand(cmd) },
             onStateTransition = { newState, reason -> handleStateTransition(newState, reason) },
             onLog = { tag, msg -> repository.addLog(tag, msg, LogLevel.INFO) }
