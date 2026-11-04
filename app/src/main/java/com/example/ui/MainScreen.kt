@@ -131,7 +131,7 @@ fun MainScreen(viewModel: BoostNetViewModel) {
                 PairingScannerScreen(
                     onDismiss = { showScanner = false },
                     onPairedSuccess = { newSecret, _ ->
-                        viewModel.regeneratePairingSecret()
+                        viewModel.onPairedWithLaptop(newSecret)
                         showScanner = false
                     }
                 )

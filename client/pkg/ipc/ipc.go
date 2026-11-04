@@ -152,7 +152,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleDonors(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	donors := []discovery.DonorNode{}
+	donors := []*discovery.DonorNode{}
 	if s.pool != nil {
 		donors = s.pool.GetActiveDonors()
 	}

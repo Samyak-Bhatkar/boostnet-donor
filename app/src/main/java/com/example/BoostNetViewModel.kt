@@ -79,6 +79,10 @@ class BoostNetViewModel(application: Application) : AndroidViewModel(application
         repository.regenerateSessionSecret()
     }
 
+    fun onPairedWithLaptop(secret: String) {
+        repository.setPairedSecret(secret)
+    }
+
     fun updateConfig(newConfig: DonorConfig) {
         repository.updateConfig(newConfig)
     }

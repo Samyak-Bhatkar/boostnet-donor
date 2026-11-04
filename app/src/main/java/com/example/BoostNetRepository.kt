@@ -72,6 +72,12 @@ class BoostNetRepository(private val context: Context) {
         addLog("Crypto", "Generated new pairing session secret. Previous laptop sessions invalidated.", LogLevel.WARN)
     }
 
+    fun setPairedSecret(secret: String) {
+        CryptoManager.savePairedSecret(context, secret)
+        _sessionSecret.value = secret
+        addLog("Crypto", "Laptop pairing successful. Session secret synchronized.", LogLevel.INFO)
+    }
+
     fun addLog(tag: String, message: String, level: LogLevel = LogLevel.INFO) {
         val entry = LogEntry(tag = tag, message = message, level = level)
         val currentList = _logEntries.value.toMutableList()
