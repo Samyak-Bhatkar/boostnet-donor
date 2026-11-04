@@ -24,6 +24,7 @@ import com.example.model.TelemetryStats
 import com.example.network.CellularNetworkBinder
 import com.example.network.WifiNetworkMonitor
 import com.example.proxy.Socks5ProxyServer
+import com.example.telemetry.GroundTruthCollector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
