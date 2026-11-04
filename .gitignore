@@ -18,3 +18,5 @@ debug.keystore.base64
 *.exe
 
 *.apk
+session.json
+*.exe~

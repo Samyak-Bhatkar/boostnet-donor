@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 )
@@ -98,4 +99,25 @@ func (s *Session) NumericPIN() string {
 		sb.WriteByte(alphabet[idx])
 	}
 	return sb.String()
+}
+
+// LoadOrGenerateSession loads an existing session from filepath or generates a new one.
+func LoadOrGenerateSession(laptopID, filepath string) (*Session, error) {
+	if data, err := os.ReadFile(filepath); err == nil {
+		var s Session
+		if err := json.Unmarshal(data, &s); err == nil && s.MasterSecret != "" {
+			return &s, nil
+		}
+	}
+
+	s, err := GenerateSession(laptopID)
+	if err != nil {
+		return nil, err
+	}
+
+	if data, err := json.MarshalIndent(s, "", "  "); err == nil {
+		_ = os.WriteFile(filepath, data, 0600)
+	}
+
+	return s, nil
 }

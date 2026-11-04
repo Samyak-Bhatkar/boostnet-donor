@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -53,8 +54,10 @@ import com.example.ui.theme.GoogleRed
 fun PairingDialog(
     config: DonorConfig,
     secret: String,
+    isPaired: Boolean = false,
     onDismiss: () -> Unit,
     onRegenerateSecret: () -> Unit,
+    onUnpair: () -> Unit = {},
     onOpenScanner: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -88,7 +91,23 @@ fun PairingDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                                if (isPaired) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF0F3822))
+                            .padding(12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF34A853), modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Phone is Paired & Active", color = Color(0xFF34A853), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
                 // Simulated QR Code Matrix derived deterministically from secret
                 QrCodeCanvas(

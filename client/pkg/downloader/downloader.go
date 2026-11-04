@@ -31,12 +31,14 @@ type ChunkJob struct {
 }
 
 type Downloader struct {
-	pool *discovery.Pool
+	pool       *discovery.Pool
+	authSecret string
 }
 
-func New(pool *discovery.Pool) *Downloader {
+func New(pool *discovery.Pool, authSecret string) *Downloader {
 	return &Downloader{
-		pool: pool,
+		pool:       pool,
+		authSecret: authSecret,
 	}
 }
 
@@ -162,9 +164,15 @@ func (d *Downloader) DownloadFile(ctx context.Context, req DownloadRequest, prog
 
 				// Build SOCKS5 proxy client for this donor
 				socksAddr := fmt.Sprintf("%s:%d", dNode.IP.String(), dNode.SocksPort)
+				pwd := dNode.ID // fallback
+				_ = pwd
+				proxyPwd := d.authSecret
+				if proxyPwd == "" {
+					proxyPwd = "password"
+				}
 				dialer, err := proxy.SOCKS5("tcp", socksAddr, &proxy.Auth{
 					User:     "boostnet",
-					Password: "password", // Negotiated via derived key or session token
+					Password: proxyPwd,
 				}, proxy.Direct)
 
 				var httpClient *http.Client

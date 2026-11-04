@@ -1,6 +1,7 @@
 package com.example.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Cable
 import androidx.compose.material.icons.filled.PlayArrow
@@ -70,6 +72,7 @@ fun HomeScreen(
     config: DonorConfig,
     stats: TelemetryStats,
     speedHistory: List<Double>,
+    isPaired: Boolean = false,
     onToggleService: () -> Unit,
     onShowPairing: () -> Unit,
     onShowSettings: () -> Unit
@@ -114,14 +117,24 @@ fun HomeScreen(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val pairColor = if (isPaired) Color(0xFF34A853) else GoogleBluePrimary
                 OutlinedButton(
                     onClick = onShowPairing,
                     shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, pairColor),
                     modifier = Modifier.testTag("pairing_button")
                 ) {
-                    Icon(Icons.Default.QrCode2, contentDescription = "Pairing QR", tint = GoogleBluePrimary)
+                    Icon(
+                        if (isPaired) Icons.Default.CheckCircle else Icons.Default.QrCode2,
+                        contentDescription = if (isPaired) "Paired" else "Pairing QR",
+                        tint = pairColor
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Pair", color = GoogleBluePrimary)
+                    Text(
+                        if (isPaired) "Paired" else "Pair",
+                        color = pairColor,
+                        fontWeight = if (isPaired) FontWeight.Bold else FontWeight.Normal
+                    )
                 }
 
                 OutlinedButton(

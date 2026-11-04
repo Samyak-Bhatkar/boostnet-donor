@@ -46,6 +46,7 @@ fun MainScreen(viewModel: BoostNetViewModel) {
     val speedHistory by viewModel.speedHistory.collectAsState()
     val logEntries by viewModel.logEntries.collectAsState()
     val sessionSecret by viewModel.sessionSecret.collectAsState()
+    val isPaired by viewModel.isPaired.collectAsState()
     val selfTestResult by viewModel.selfTestResult.collectAsState()
     val isTesting by viewModel.isTesting.collectAsState()
 
@@ -100,6 +101,7 @@ fun MainScreen(viewModel: BoostNetViewModel) {
                     config = donorConfig,
                     stats = telemetryStats,
                     speedHistory = speedHistory,
+                    isPaired = isPaired,
                     onToggleService = { viewModel.toggleDonorService(context) },
                     onShowPairing = { showPairingDialog = true },
                     onShowSettings = { showSettingsSheet = true }
@@ -118,6 +120,8 @@ fun MainScreen(viewModel: BoostNetViewModel) {
                 PairingDialog(
                     config = donorConfig,
                     secret = sessionSecret,
+                    isPaired = isPaired,
+                    onUnpair = { viewModel.unpair() },
                     onDismiss = { showPairingDialog = false },
                     onRegenerateSecret = { viewModel.regeneratePairingSecret() },
                     onOpenScanner = {

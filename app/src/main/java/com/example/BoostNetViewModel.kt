@@ -37,6 +37,9 @@ class BoostNetViewModel(application: Application) : AndroidViewModel(application
     val sessionSecret: StateFlow<String> = repository.sessionSecret
         .stateIn(viewModelScope, SharingStarted.Eagerly, repository.sessionSecret.value)
 
+    val isPaired: StateFlow<Boolean> = repository.isPaired
+        .stateIn(viewModelScope, SharingStarted.Eagerly, repository.isPaired.value)
+
     private val _speedHistory = MutableStateFlow<List<Double>>(emptyList())
     val speedHistory: StateFlow<List<Double>> = _speedHistory.asStateFlow()
 
@@ -73,6 +76,10 @@ class BoostNetViewModel(application: Application) : AndroidViewModel(application
             }
             context.startService(intent)
         }
+    }
+
+    fun unpair() {
+        repository.unpair()
     }
 
     fun regeneratePairingSecret() {

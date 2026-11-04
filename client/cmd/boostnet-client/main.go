@@ -33,7 +33,7 @@ func main() {
 	if hostname == "" {
 		hostname = "laptop"
 	}
-	session, err := pairing.GenerateSession(hostname)
+	session, err := pairing.LoadOrGenerateSession(hostname, "session.json")
 	if err != nil {
 		log.Fatalf("Failed to initialize cryptographic session: %v", err)
 	}
@@ -60,13 +60,13 @@ func main() {
 
 	// 4. Initialize SNI-sticky balancer and local proxy
 	bal := balancer.New(pool)
-	proxySrv := proxy.New(bal)
+	proxySrv := proxy.New(bal, session.MasterSecret)
 	if err := proxySrv.StartHTTP(8080); err != nil {
 		log.Fatalf("Failed to start local proxy on 127.0.0.1:8080: %v", err)
 	}
 
 	// 5. Initialize Web Dashboard, Download Accelerator & Browser Extension IPC (:10801)
-	dl := downloader.New(pool)
+	dl := downloader.New(pool, session.MasterSecret)
 	ipcSrv := ipc.New(dl, session, pool)
 	if err := ipcSrv.Start(10801); err != nil {
 		log.Printf("[Warning] Dashboard/IPC start warning: %v", err)

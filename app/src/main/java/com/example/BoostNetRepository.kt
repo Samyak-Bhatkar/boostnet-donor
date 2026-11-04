@@ -43,6 +43,9 @@ class BoostNetRepository(private val context: Context) {
     private val _sessionSecret = MutableStateFlow(CryptoManager.getOrCreateSessionSecret(context))
     val sessionSecret = _sessionSecret.asStateFlow()
 
+    private val _isPaired = MutableStateFlow(CryptoManager.isPaired(context))
+    val isPaired = _isPaired.asStateFlow()
+
     private val scope = CoroutineScope(Dispatchers.IO)
 
     init {
@@ -69,13 +72,23 @@ class BoostNetRepository(private val context: Context) {
     fun regenerateSessionSecret() {
         val newSecret = CryptoManager.generateNewSecret(context)
         _sessionSecret.value = newSecret
+        _isPaired.value = false
         addLog("Crypto", "Generated new pairing session secret. Previous laptop sessions invalidated.", LogLevel.WARN)
     }
 
     fun setPairedSecret(secret: String) {
         CryptoManager.savePairedSecret(context, secret)
         _sessionSecret.value = secret
+        _isPaired.value = true
         addLog("Crypto", "Laptop pairing successful. Session secret synchronized.", LogLevel.INFO)
+    }
+
+    
+    fun unpair() {
+        CryptoManager.unpair(context)
+        _isPaired.value = false
+        _sessionSecret.value = CryptoManager.getOrCreateSessionSecret(context)
+        addLog("Crypto", "Unpaired from laptop.", LogLevel.WARN)
     }
 
     fun addLog(tag: String, message: String, level: LogLevel = LogLevel.INFO) {

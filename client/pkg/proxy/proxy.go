@@ -17,15 +17,17 @@ import (
 
 type Server struct {
 	balancer   *balancer.Balancer
+	authSecret string
 	httpServer *http.Server
 	socksLn    net.Listener
 	mu         sync.Mutex
 	closed     bool
 }
 
-func New(b *balancer.Balancer) *Server {
+func New(b *balancer.Balancer, authSecret string) *Server {
 	return &Server{
-		balancer: b,
+		balancer:   b,
+		authSecret: authSecret,
 	}
 }
 
@@ -67,9 +69,13 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	if err == nil && donor != nil {
 		// Tunnel through donor SOCKS5
 		socksAddr := fmt.Sprintf("%s:%d", donor.IP.String(), donor.SocksPort)
+		pwd := s.authSecret
+		if pwd == "" {
+			pwd = "password"
+		}
 		dialer, sErr := proxy.SOCKS5("tcp", socksAddr, &proxy.Auth{
 			User:     "boostnet",
-			Password: "password",
+			Password: pwd,
 		}, proxy.Direct)
 
 		if sErr == nil {
@@ -119,7 +125,14 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if err == nil && donor != nil {
 		socksAddr := fmt.Sprintf("%s:%d", donor.IP.String(), donor.SocksPort)
-		dialer, sErr := proxy.SOCKS5("tcp", socksAddr, nil, proxy.Direct)
+		pwd := s.authSecret
+		if pwd == "" {
+			pwd = "password"
+		}
+		dialer, sErr := proxy.SOCKS5("tcp", socksAddr, &proxy.Auth{
+			User:     "boostnet",
+			Password: pwd,
+		}, proxy.Direct)
 		if sErr == nil {
 			transport = &http.Transport{
 				DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
