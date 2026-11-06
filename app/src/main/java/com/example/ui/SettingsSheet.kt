@@ -48,8 +48,8 @@ fun SettingsSheet(
     var tech by remember { mutableStateOf(currentConfig.tech) }
     var quotaGb by remember { mutableFloatStateOf((currentConfig.quotaLimitBytes / (1024f * 1024f * 1024f)).coerceIn(0.1f, 20f)) }
 
-    val carriers = listOf("Jio", "Airtel", "Vi", "BSNL", "Other")
-    val techs = listOf("4G", "5G")
+    val carriers = listOf("Airtel", "Jio", "Vi", "BSNL", "Other")
+    val techs = listOf("5G", "4G", "3G", "2G")
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(

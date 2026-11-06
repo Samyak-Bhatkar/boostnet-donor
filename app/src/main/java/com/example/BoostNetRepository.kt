@@ -196,19 +196,44 @@ class BoostNetRepository(private val context: Context) {
     fun getDefaultCarrierName(): String {
         try {
             val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
-            val simName = tm?.simOperatorName?.takeIf { it.isNotBlank() }
-            val netName = tm?.networkOperatorName?.takeIf { it.isNotBlank() }
-            val raw = simName ?: netName ?: ""
+            val sm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE) as? android.telephony.SubscriptionManager
+            } else null
+
+            var rawCarrier: String? = null
+
+            // Check default data subscription on dual SIM devices
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && sm != null) {
+                try {
+                    val defaultDataSubId = android.telephony.SubscriptionManager.getDefaultDataSubscriptionId()
+                    val activeSubInfo = sm.getActiveSubscriptionInfo(defaultDataSubId)
+                    val displayName = activeSubInfo?.displayName?.toString()?.takeIf { it.isNotBlank() }
+                    val carrierName = activeSubInfo?.carrierName?.toString()?.takeIf { it.isNotBlank() }
+                    rawCarrier = carrierName ?: displayName
+                } catch (_: Exception) {}
+            }
+
+            // Fallback to TelephonyManager SIM and Network operator names
+            if (rawCarrier.isNullOrBlank()) {
+                rawCarrier = tm?.simOperatorName?.takeIf { it.isNotBlank() }
+                    ?: tm?.networkOperatorName?.takeIf { it.isNotBlank() }
+            }
+
+            val clean = rawCarrier?.trim() ?: ""
             return when {
-                raw.contains("airtel", ignoreCase = true) -> "Airtel"
-                raw.contains("jio", ignoreCase = true) -> "Jio"
-                raw.contains("vi", ignoreCase = true) || raw.contains("vodafone", ignoreCase = true) || raw.contains("idea", ignoreCase = true) -> "Vi"
-                raw.contains("bsnl", ignoreCase = true) -> "BSNL"
-                raw.isNotBlank() -> raw.trim()
-                else -> "Airtel"
+                clean.contains("airtel", ignoreCase = true) -> "Airtel"
+                clean.contains("jio", ignoreCase = true) -> "Jio"
+                clean.contains("vi", ignoreCase = true) || clean.contains("vodafone", ignoreCase = true) || clean.contains("idea", ignoreCase = true) -> "Vi"
+                clean.contains("bsnl", ignoreCase = true) -> "BSNL"
+                clean.contains("mtnl", ignoreCase = true) -> "MTNL"
+                clean.isNotBlank() -> clean
+                else -> {
+                    val simState = tm?.simState ?: android.telephony.TelephonyManager.SIM_STATE_UNKNOWN
+                    if (simState == android.telephony.TelephonyManager.SIM_STATE_ABSENT) "No SIM" else "Cellular"
+                }
             }
         } catch (_: Exception) {
-            return "Airtel"
+            return "Cellular"
         }
     }
 
@@ -216,33 +241,48 @@ class BoostNetRepository(private val context: Context) {
         try {
             val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
-            
-            // Check dataNetworkType on API 29+ (NETWORK_TYPE_NR = 20)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                try {
-                    val dataNetType = tm?.dataNetworkType
-                    if (dataNetType == 20) {
-                        return "5G"
-                    }
-                } catch (_: Exception) {}
-            }
-            
-            // Check legacy networkType
-            try {
-                val netType = tm?.networkType
-                if (netType == 20) return "5G"
-                if (netType == android.telephony.TelephonyManager.NETWORK_TYPE_LTE) return "4G"
-            } catch (_: Exception) {}
-
-            // Check bandwidth from NetworkCapabilities
             val activeNet = cm?.activeNetwork
             val caps = activeNet?.let { cm.getNetworkCapabilities(it) }
-            val downstreamKbps = caps?.linkDownstreamBandwidthKbps ?: 0
-            if (downstreamKbps >= 40_000) {
-                return "5G"
+
+            // Check if device has active network connection
+            if (activeNet == null || caps == null) {
+                val tmSimState = tm?.simState ?: android.telephony.TelephonyManager.SIM_STATE_UNKNOWN
+                return if (tmSimState == android.telephony.TelephonyManager.SIM_STATE_ABSENT) "" else "Offline"
             }
-            
-            return "5G"
+
+            // Check exact data network type from TelephonyManager
+            var rawNetType: Int? = null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    rawNetType = tm?.dataNetworkType
+                } catch (_: Exception) {}
+            }
+            if (rawNetType == null || rawNetType == 0) {
+                try {
+                    rawNetType = tm?.networkType
+                } catch (_: Exception) {}
+            }
+
+            when (rawNetType) {
+                // 5G: NETWORK_TYPE_NR (20)
+                20 -> return "5G"
+                // 4G: LTE (13), IWLAN (18)
+                13, 18 -> return "4G"
+                // 3G: UMTS (3), EVDO (5, 6, 12), HSDPA (8), HSUPA (9), HSPA (10), HSPAP (15)
+                3, 5, 6, 8, 9, 10, 12, 15 -> return "3G"
+                // 2G: GPRS (1), EDGE (2), CDMA (4), 1xRTT (7), IDEN (11), GSM (16)
+                1, 2, 4, 7, 11, 16 -> return "2G"
+            }
+
+            // Fallback: Bandwidth heuristic
+            val downstreamKbps = caps.linkDownstreamBandwidthKbps
+            return when {
+                downstreamKbps >= 60_000 -> "5G"
+                downstreamKbps >= 10_000 -> "4G"
+                downstreamKbps >= 1_000 -> "3G"
+                downstreamKbps > 0 -> "2G"
+                else -> "5G"
+            }
         } catch (_: Exception) {
             return "5G"
         }

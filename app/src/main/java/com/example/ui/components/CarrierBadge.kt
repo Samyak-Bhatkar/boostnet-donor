@@ -45,15 +45,27 @@ fun CarrierBadge(
             .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val dotColor = if (tech.equals("2G", ignoreCase = true) || tech.equals("3G", ignoreCase = true)) {
+            Color(0xFFFBBC04) // Amber dot indicating slow 2G/3G speeds
+        } else if (carrier.equals("No SIM", ignoreCase = true) || tech.equals("Offline", ignoreCase = true)) {
+            Color(0xFF80868B)
+        } else {
+            carrierColor
+        }
         Box(
             modifier = Modifier
                 .size(8.dp)
                 .clip(CircleShape)
-                .background(carrierColor)
+                .background(dotColor)
         )
         Spacer(modifier = Modifier.width(6.dp))
+        val label = if (tech.isBlank() || tech.equals("Offline", ignoreCase = true) || carrier.equals("No SIM", ignoreCase = true)) {
+            if (carrier.equals("No SIM", ignoreCase = true)) "No SIM" else if (tech.equals("Offline", ignoreCase = true)) "Offline" else carrier
+        } else {
+            "$carrier $tech"
+        }
         Text(
-            text = "$carrier $tech",
+            text = label,
             style = MaterialTheme.typography.labelLarge,
             color = Color.White,
             fontWeight = FontWeight.SemiBold
