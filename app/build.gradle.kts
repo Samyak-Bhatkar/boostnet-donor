@@ -13,7 +13,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.boostnetdonor.xrqp"
+    applicationId = "com.boostnet.donor"
     minSdk = 26
     targetSdk = 36
     versionCode = 1

@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Context
+import android.os.Build
 import com.example.crypto.CryptoManager
 import com.example.model.DonorConfig
 import com.example.model.DonorState
@@ -27,7 +28,7 @@ class BoostNetRepository(private val context: Context) {
     private val _donorConfig: MutableStateFlow<DonorConfig> = MutableStateFlow(
         DonorConfig(
             nodeId = CryptoManager.getOrCreateNodeId(context),
-            displayName = "Pixel 8 Pro (Donor)",
+            displayName = getDefaultDeviceName(),
             carrier = "Jio",
             tech = "4G",
             quotaLimitBytes = 2L * 1024 * 1024 * 1024 // 2 GB
@@ -177,6 +178,18 @@ class BoostNetRepository(private val context: Context) {
             addLog("SelfTest", "Self-test exception: ${e.message}", LogLevel.ERROR)
             return@withContext "FAILED: ${e.message}"
         }
+    }
+
+    private fun getDefaultDeviceName(): String {
+        val model = Build.MODEL ?: "Device"
+        val manufacturer = Build.MANUFACTURER ?: "Android"
+        val cleanName = if (model.startsWith(manufacturer, ignoreCase = true)) {
+            model
+        } else {
+            val capitalized = manufacturer.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            "$capitalized $model"
+        }
+        return "$cleanName (Donor)"
     }
 
     companion object {

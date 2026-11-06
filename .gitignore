@@ -12,7 +12,8 @@ app/build/
 .cxx
 local.properties
 .env
-debug.keystore
+/debug.keystore
+!keystore/debug.keystore
 debug.keystore.base64
 
 *.exe
