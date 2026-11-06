@@ -29,8 +29,8 @@ class BoostNetRepository(private val context: Context) {
         DonorConfig(
             nodeId = CryptoManager.getOrCreateNodeId(context),
             displayName = getDefaultDeviceName(),
-            carrier = "Jio",
-            tech = "4G",
+            carrier = getDefaultCarrierName(),
+            tech = getDefaultNetworkTech(),
             quotaLimitBytes = 2L * 1024 * 1024 * 1024 // 2 GB
         )
     )
@@ -190,6 +190,75 @@ class BoostNetRepository(private val context: Context) {
             "$capitalized $model"
         }
         return "$cleanName (Donor)"
+    }
+
+
+    fun getDefaultCarrierName(): String {
+        try {
+            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+            val simName = tm?.simOperatorName?.takeIf { it.isNotBlank() }
+            val netName = tm?.networkOperatorName?.takeIf { it.isNotBlank() }
+            val raw = simName ?: netName ?: ""
+            return when {
+                raw.contains("airtel", ignoreCase = true) -> "Airtel"
+                raw.contains("jio", ignoreCase = true) -> "Jio"
+                raw.contains("vi", ignoreCase = true) || raw.contains("vodafone", ignoreCase = true) || raw.contains("idea", ignoreCase = true) -> "Vi"
+                raw.contains("bsnl", ignoreCase = true) -> "BSNL"
+                raw.isNotBlank() -> raw.trim()
+                else -> "Airtel"
+            }
+        } catch (_: Exception) {
+            return "Airtel"
+        }
+    }
+
+    fun getDefaultNetworkTech(): String {
+        try {
+            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            
+            // Check dataNetworkType on API 29+ (NETWORK_TYPE_NR = 20)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    val dataNetType = tm?.dataNetworkType
+                    if (dataNetType == 20) {
+                        return "5G"
+                    }
+                } catch (_: Exception) {}
+            }
+            
+            // Check legacy networkType
+            try {
+                val netType = tm?.networkType
+                if (netType == 20) return "5G"
+                if (netType == android.telephony.TelephonyManager.NETWORK_TYPE_LTE) return "4G"
+            } catch (_: Exception) {}
+
+            // Check bandwidth from NetworkCapabilities
+            val activeNet = cm?.activeNetwork
+            val caps = activeNet?.let { cm.getNetworkCapabilities(it) }
+            val downstreamKbps = caps?.linkDownstreamBandwidthKbps ?: 0
+            if (downstreamKbps >= 40_000) {
+                return "5G"
+            }
+            
+            return "5G"
+        } catch (_: Exception) {
+            return "5G"
+        }
+    }
+
+    fun refreshNetworkInfo() {
+        val detectedCarrier = getDefaultCarrierName()
+        val detectedTech = getDefaultNetworkTech()
+        val current = _donorConfig.value
+        if (detectedCarrier != current.carrier || detectedTech != current.tech) {
+            _donorConfig.value = current.copy(
+                carrier = detectedCarrier,
+                tech = detectedTech
+            )
+            addLog("Network", "Auto-detected carrier: $detectedCarrier, network: $detectedTech", LogLevel.INFO)
+        }
     }
 
     companion object {

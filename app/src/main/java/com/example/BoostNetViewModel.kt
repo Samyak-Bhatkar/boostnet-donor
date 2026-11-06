@@ -50,6 +50,7 @@ class BoostNetViewModel(application: Application) : AndroidViewModel(application
     val isTesting: StateFlow<Boolean> = _isTesting.asStateFlow()
 
     init {
+        refreshNetworkInfo()
         // Collect telemetry throughput to update speed history buffer
         viewModelScope.launch {
             telemetryStats.collect { stats ->
@@ -88,6 +89,10 @@ class BoostNetViewModel(application: Application) : AndroidViewModel(application
 
     fun onPairedWithLaptop(secret: String) {
         repository.setPairedSecret(secret)
+    }
+
+    fun refreshNetworkInfo() {
+        repository.refreshNetworkInfo()
     }
 
     fun updateConfig(newConfig: DonorConfig) {
