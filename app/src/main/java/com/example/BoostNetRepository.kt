@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Context
 import android.os.Build
+import androidx.core.content.ContextCompat
 import com.example.crypto.CryptoManager
 import com.example.model.DonorConfig
 import com.example.model.DonorState
@@ -52,6 +53,7 @@ class BoostNetRepository(private val context: Context) {
 
     init {
         addLog("BoostNet", "BoostNet repository initialized. Node ID: ${_donorConfig.value.nodeId}", LogLevel.INFO)
+        registerNetworkCallback()
     }
 
     fun updateState(newState: DonorState, reason: String = "") {
@@ -210,7 +212,7 @@ class BoostNetRepository(private val context: Context) {
                     val displayName = activeSubInfo?.displayName?.toString()?.takeIf { it.isNotBlank() }
                     val carrierName = activeSubInfo?.carrierName?.toString()?.takeIf { it.isNotBlank() }
                     rawCarrier = carrierName ?: displayName
-                } catch (_: Exception) {}
+                } catch (e: Exception) {}
             }
 
             // Fallback to TelephonyManager SIM and Network operator names
@@ -221,9 +223,10 @@ class BoostNetRepository(private val context: Context) {
 
             val clean = rawCarrier?.trim() ?: ""
             return when {
-                clean.contains("airtel", ignoreCase = true) -> "Airtel"
+                clean.contains("airtel", ignoreCase = true) || clean.contains("bharti", ignoreCase = true) -> "Airtel"
                 clean.contains("jio", ignoreCase = true) -> "Jio"
-                clean.contains("vi", ignoreCase = true) || clean.contains("vodafone", ignoreCase = true) || clean.contains("idea", ignoreCase = true) -> "Vi"
+                clean.startsWith("vi", ignoreCase = true) || clean.contains(" vi", ignoreCase = true) ||
+                    clean.contains("vodafone", ignoreCase = true) || clean.contains("idea", ignoreCase = true) -> "Vi"
                 clean.contains("bsnl", ignoreCase = true) -> "BSNL"
                 clean.contains("mtnl", ignoreCase = true) -> "MTNL"
                 clean.isNotBlank() -> clean
@@ -232,7 +235,7 @@ class BoostNetRepository(private val context: Context) {
                     if (simState == android.telephony.TelephonyManager.SIM_STATE_ABSENT) "No SIM" else "Cellular"
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             return "Cellular"
         }
     }
@@ -241,18 +244,10 @@ class BoostNetRepository(private val context: Context) {
         try {
             val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
-            val activeNet = cm?.activeNetwork
-            val caps = activeNet?.let { cm.getNetworkCapabilities(it) }
 
-            // Check if device has active network connection
-            if (activeNet == null || caps == null) {
-                val tmSimState = tm?.simState ?: android.telephony.TelephonyManager.SIM_STATE_UNKNOWN
-                return if (tmSimState == android.telephony.TelephonyManager.SIM_STATE_ABSENT) "" else "Offline"
-            }
-
-            // --- 1. Check for 5G NSA (Non-Standalone) & 5G SA via ServiceState ---
-            // Airtel in India uses 5G NSA where dataNetworkType reports LTE (13),
-            // but ServiceState reports nrState=CONNECTED or isEnDcAvailable=true.
+            // --- 1. Check for 5G via TelephonyManager ServiceState ---
+            // On Airtel 5G NSA, dataNetworkType reports LTE (13), but ServiceState reports:
+            // nrState=CONNECTED, nrState=NOT_RESTRICTED, NR_NSA, isEnDcAvailable=true, isNrAvailable=true
             try {
                 val ss = tm?.serviceState
                 if (ss != null) {
@@ -262,23 +257,25 @@ class BoostNetRepository(private val context: Context) {
                         ssStr.contains("NR_NSA", ignoreCase = true) ||
                         ssStr.contains("NR_ADVANCED", ignoreCase = true) ||
                         ssStr.contains("isEnDcAvailable=true", ignoreCase = true) ||
-                        ssStr.contains("isNrAvailable=true", ignoreCase = true)) {
+                        ssStr.contains("isNrAvailable=true", ignoreCase = true) ||
+                        ssStr.contains("CellIdentityNr", ignoreCase = true)) {
                         return "5G"
                     }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {}
 
             // --- 2. Check exact data network type from TelephonyManager ---
             var rawNetType: Int? = null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 try {
                     rawNetType = tm?.dataNetworkType
-                } catch (_: Exception) {}
+                } catch (e: Exception) {}
             }
             if (rawNetType == null || rawNetType == 0) {
                 try {
+                    @Suppress("DEPRECATION")
                     rawNetType = tm?.networkType
-                } catch (_: Exception) {}
+                } catch (e: Exception) {}
             }
 
             // 5G SA (Standalone): NETWORK_TYPE_NR (20)
@@ -286,10 +283,33 @@ class BoostNetRepository(private val context: Context) {
                 return "5G"
             }
 
-            // Check if link bandwidth reflects 5G downstream (> 30 Mbps)
-            val downstreamKbps = caps.linkDownstreamBandwidthKbps
-            if (downstreamKbps >= 30_000) {
-                return "5G"
+            // --- 3. Check Cellular NetworkCapabilities (even if Wi-Fi is active) ---
+            var cellularCaps: android.net.NetworkCapabilities? = null
+            if (cm != null) {
+                try {
+                    val activeNet = cm.activeNetwork
+                    val activeCaps = activeNet?.let { cm.getNetworkCapabilities(it) }
+                    if (activeCaps != null && activeCaps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                        cellularCaps = activeCaps
+                    } else {
+                        // Scan for cellular transport across available networks
+                        for (net in cm.allNetworks) {
+                            val c = cm.getNetworkCapabilities(net)
+                            if (c != null && c.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                                cellularCaps = c
+                                break
+                            }
+                        }
+                    }
+                } catch (e: Exception) {}
+            }
+
+            // Check if cellular link bandwidth indicates 5G
+            if (cellularCaps != null) {
+                val downstreamKbps = cellularCaps.linkDownstreamBandwidthKbps
+                if (downstreamKbps >= 30_000) {
+                    return "5G"
+                }
             }
 
             when (rawNetType) {
@@ -301,13 +321,19 @@ class BoostNetRepository(private val context: Context) {
                 1, 2, 4, 7, 11, 16 -> return "2G"
             }
 
-            return when {
-                downstreamKbps >= 10_000 -> "4G"
-                downstreamKbps >= 1_000 -> "3G"
-                downstreamKbps > 0 -> "2G"
-                else -> "5G"
+            if (cellularCaps != null) {
+                val downstreamKbps = cellularCaps.linkDownstreamBandwidthKbps
+                return when {
+                    downstreamKbps >= 10_000 -> "4G"
+                    downstreamKbps >= 1_000 -> "3G"
+                    downstreamKbps > 0 -> "2G"
+                    else -> "5G"
+                }
             }
-        } catch (_: Exception) {
+
+            val tmSimState = tm?.simState ?: android.telephony.TelephonyManager.SIM_STATE_UNKNOWN
+            return if (tmSimState == android.telephony.TelephonyManager.SIM_STATE_ABSENT) "" else "5G"
+        } catch (e: Exception) {
             return "5G"
         }
     }
@@ -315,6 +341,7 @@ class BoostNetRepository(private val context: Context) {
     private fun registerNetworkCallback() {
         try {
             val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager ?: return
+            val mainExecutor = ContextCompat.getMainExecutor(context)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val callback = object : android.telephony.TelephonyCallback(), android.telephony.TelephonyCallback.DisplayInfoListener {
                     override fun onDisplayInfoChanged(telephonyDisplayInfo: android.telephony.TelephonyDisplayInfo) {
@@ -329,11 +356,12 @@ class BoostNetRepository(private val context: Context) {
                         } else if (!is5G && telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_LTE) {
                             if (_donorConfig.value.tech != "4G") {
                                 _donorConfig.value = _donorConfig.value.copy(tech = "4G")
+                                addLog("Network", "DisplayInfo listener: 4G LTE detected", LogLevel.INFO)
                             }
                         }
                     }
                 }
-                tm.registerTelephonyCallback(context.mainExecutor, callback)
+                tm.registerTelephonyCallback(mainExecutor, callback)
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 @Suppress("DEPRECATION")
                 val listener = object : android.telephony.PhoneStateListener() {
@@ -359,6 +387,7 @@ class BoostNetRepository(private val context: Context) {
     }
 
     fun refreshNetworkInfo() {
+        registerNetworkCallback()
         val detectedCarrier = getDefaultCarrierName()
         val detectedTech = getDefaultNetworkTech()
         val current = _donorConfig.value
