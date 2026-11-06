@@ -47,23 +47,18 @@ jobs:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
 
-    - name: Prepare Named Release APK
-      run: cp app/build/outputs/apk/debug/app-debug.apk boostnet-donor-v1.0.apk
-
     - name: Release Latest APK
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
-        name: "BoostNet Donor APK (v1.0 - Airtel 5G NSA & Dynamic Detection)"
+        name: "BoostNet Donor APK (Latest)"
         body: |
           ### BoostNet Donor Node v1.0
           - Dynamic SIM Carrier Detection (Airtel, Jio, Vi, BSNL, MTNL).
           - Dynamic 5G NSA (Non-Standalone) detection for Airtel EN-DC networks.
           - Dynamic Device Model Detection (Motorola moto g45 5G, Pixel, Samsung, etc.).
           - Unified permanent static debug keystore (clean updates without signature conflicts).
-        files: |
-          app/build/outputs/apk/debug/app-debug.apk
-          boostnet-donor-v1.0.apk
+        files: app/build/outputs/apk/debug/app-debug.apk
         overwrite_files: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
