@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Context
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.example.crypto.CryptoManager
 import com.example.model.DonorConfig
@@ -338,48 +339,55 @@ class BoostNetRepository(private val context: Context) {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun registerApi31Callback(tm: android.telephony.TelephonyManager) {
+        val callback = object : android.telephony.TelephonyCallback(), android.telephony.TelephonyCallback.DisplayInfoListener {
+            override fun onDisplayInfoChanged(telephonyDisplayInfo: android.telephony.TelephonyDisplayInfo) {
+                val is5G = when (telephonyDisplayInfo.overrideNetworkType) {
+                    android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_NSA,
+                    android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_ADVANCED -> true
+                    else -> telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_NR
+                }
+                if (is5G && _donorConfig.value.tech != "5G") {
+                    _donorConfig.value = _donorConfig.value.copy(tech = "5G")
+                    addLog("Network", "DisplayInfo listener: 5G NSA/NR detected", LogLevel.INFO)
+                } else if (!is5G && telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_LTE) {
+                    if (_donorConfig.value.tech != "4G") {
+                        _donorConfig.value = _donorConfig.value.copy(tech = "4G")
+                        addLog("Network", "DisplayInfo listener: 4G LTE detected", LogLevel.INFO)
+                    }
+                }
+            }
+        }
+        tm.registerTelephonyCallback(ContextCompat.getMainExecutor(context), callback)
+    }
+
+    @Suppress("DEPRECATION")
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun registerApi30Listener(tm: android.telephony.TelephonyManager) {
+        val listener = object : android.telephony.PhoneStateListener() {
+            override fun onDisplayInfoChanged(telephonyDisplayInfo: android.telephony.TelephonyDisplayInfo) {
+                val is5G = when (telephonyDisplayInfo.overrideNetworkType) {
+                    android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_NSA,
+                    android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_ADVANCED -> true
+                    else -> telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_NR
+                }
+                if (is5G && _donorConfig.value.tech != "5G") {
+                    _donorConfig.value = _donorConfig.value.copy(tech = "5G")
+                    addLog("Network", "DisplayInfo listener: 5G NSA/NR detected", LogLevel.INFO)
+                }
+            }
+        }
+        tm.listen(listener, android.telephony.PhoneStateListener.LISTEN_DISPLAY_INFO_CHANGED)
+    }
+
     private fun registerNetworkCallback() {
         try {
             val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager ?: return
-            val mainExecutor = ContextCompat.getMainExecutor(context)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val callback = object : android.telephony.TelephonyCallback(), android.telephony.TelephonyCallback.DisplayInfoListener {
-                    override fun onDisplayInfoChanged(telephonyDisplayInfo: android.telephony.TelephonyDisplayInfo) {
-                        val is5G = when (telephonyDisplayInfo.overrideNetworkType) {
-                            android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_NSA,
-                            android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_ADVANCED -> true
-                            else -> telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_NR
-                        }
-                        if (is5G && _donorConfig.value.tech != "5G") {
-                            _donorConfig.value = _donorConfig.value.copy(tech = "5G")
-                            addLog("Network", "DisplayInfo listener: 5G NSA/NR detected", LogLevel.INFO)
-                        } else if (!is5G && telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_LTE) {
-                            if (_donorConfig.value.tech != "4G") {
-                                _donorConfig.value = _donorConfig.value.copy(tech = "4G")
-                                addLog("Network", "DisplayInfo listener: 4G LTE detected", LogLevel.INFO)
-                            }
-                        }
-                    }
-                }
-                tm.registerTelephonyCallback(mainExecutor, callback)
+                registerApi31Callback(tm)
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                @Suppress("DEPRECATION")
-                val listener = object : android.telephony.PhoneStateListener() {
-                    @Deprecated("Deprecated in Java")
-                    override fun onDisplayInfoChanged(telephonyDisplayInfo: android.telephony.TelephonyDisplayInfo) {
-                        val is5G = when (telephonyDisplayInfo.overrideNetworkType) {
-                            android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_NSA,
-                            android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_ADVANCED -> true
-                            else -> telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_NR
-                        }
-                        if (is5G && _donorConfig.value.tech != "5G") {
-                            _donorConfig.value = _donorConfig.value.copy(tech = "5G")
-                            addLog("Network", "DisplayInfo listener: 5G NSA/NR detected", LogLevel.INFO)
-                        }
-                    }
-                }
-                @Suppress("DEPRECATION")
-                tm.listen(listener, android.telephony.PhoneStateListener.LISTEN_DISPLAY_INFO_CHANGED)
+                registerApi30Listener(tm)
             }
         } catch (e: Exception) {
             addLog("Network", "DisplayInfo listener: ${e.message}", LogLevel.DEBUG)
