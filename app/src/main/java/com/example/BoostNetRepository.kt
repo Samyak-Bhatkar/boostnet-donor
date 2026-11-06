@@ -250,7 +250,25 @@ class BoostNetRepository(private val context: Context) {
                 return if (tmSimState == android.telephony.TelephonyManager.SIM_STATE_ABSENT) "" else "Offline"
             }
 
-            // Check exact data network type from TelephonyManager
+            // --- 1. Check for 5G NSA (Non-Standalone) & 5G SA via ServiceState ---
+            // Airtel in India uses 5G NSA where dataNetworkType reports LTE (13),
+            // but ServiceState reports nrState=CONNECTED or isEnDcAvailable=true.
+            try {
+                val ss = tm?.serviceState
+                if (ss != null) {
+                    val ssStr = ss.toString()
+                    if (ssStr.contains("nrState=CONNECTED", ignoreCase = true) ||
+                        ssStr.contains("nrState=NOT_RESTRICTED", ignoreCase = true) ||
+                        ssStr.contains("NR_NSA", ignoreCase = true) ||
+                        ssStr.contains("NR_ADVANCED", ignoreCase = true) ||
+                        ssStr.contains("isEnDcAvailable=true", ignoreCase = true) ||
+                        ssStr.contains("isNrAvailable=true", ignoreCase = true)) {
+                        return "5G"
+                    }
+                }
+            } catch (_: Exception) {}
+
+            // --- 2. Check exact data network type from TelephonyManager ---
             var rawNetType: Int? = null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 try {
@@ -263,9 +281,18 @@ class BoostNetRepository(private val context: Context) {
                 } catch (_: Exception) {}
             }
 
+            // 5G SA (Standalone): NETWORK_TYPE_NR (20)
+            if (rawNetType == 20) {
+                return "5G"
+            }
+
+            // Check if link bandwidth reflects 5G downstream (> 30 Mbps)
+            val downstreamKbps = caps.linkDownstreamBandwidthKbps
+            if (downstreamKbps >= 30_000) {
+                return "5G"
+            }
+
             when (rawNetType) {
-                // 5G: NETWORK_TYPE_NR (20)
-                20 -> return "5G"
                 // 4G: LTE (13), IWLAN (18)
                 13, 18 -> return "4G"
                 // 3G: UMTS (3), EVDO (5, 6, 12), HSDPA (8), HSUPA (9), HSPA (10), HSPAP (15)
@@ -274,10 +301,7 @@ class BoostNetRepository(private val context: Context) {
                 1, 2, 4, 7, 11, 16 -> return "2G"
             }
 
-            // Fallback: Bandwidth heuristic
-            val downstreamKbps = caps.linkDownstreamBandwidthKbps
             return when {
-                downstreamKbps >= 60_000 -> "5G"
                 downstreamKbps >= 10_000 -> "4G"
                 downstreamKbps >= 1_000 -> "3G"
                 downstreamKbps > 0 -> "2G"
@@ -285,6 +309,52 @@ class BoostNetRepository(private val context: Context) {
             }
         } catch (_: Exception) {
             return "5G"
+        }
+    }
+
+    private fun registerNetworkCallback() {
+        try {
+            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val callback = object : android.telephony.TelephonyCallback(), android.telephony.TelephonyCallback.DisplayInfoListener {
+                    override fun onDisplayInfoChanged(telephonyDisplayInfo: android.telephony.TelephonyDisplayInfo) {
+                        val is5G = when (telephonyDisplayInfo.overrideNetworkType) {
+                            android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_NSA,
+                            android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_ADVANCED -> true
+                            else -> telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_NR
+                        }
+                        if (is5G && _donorConfig.value.tech != "5G") {
+                            _donorConfig.value = _donorConfig.value.copy(tech = "5G")
+                            addLog("Network", "DisplayInfo listener: 5G NSA/NR detected", LogLevel.INFO)
+                        } else if (!is5G && telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_LTE) {
+                            if (_donorConfig.value.tech != "4G") {
+                                _donorConfig.value = _donorConfig.value.copy(tech = "4G")
+                            }
+                        }
+                    }
+                }
+                tm.registerTelephonyCallback(context.mainExecutor, callback)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                @Suppress("DEPRECATION")
+                val listener = object : android.telephony.PhoneStateListener() {
+                    @Deprecated("Deprecated in Java")
+                    override fun onDisplayInfoChanged(telephonyDisplayInfo: android.telephony.TelephonyDisplayInfo) {
+                        val is5G = when (telephonyDisplayInfo.overrideNetworkType) {
+                            android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_NSA,
+                            android.telephony.TelephonyDisplayInfo.OVERRIDE_NETWORK_TYPE_NR_ADVANCED -> true
+                            else -> telephonyDisplayInfo.networkType == android.telephony.TelephonyManager.NETWORK_TYPE_NR
+                        }
+                        if (is5G && _donorConfig.value.tech != "5G") {
+                            _donorConfig.value = _donorConfig.value.copy(tech = "5G")
+                            addLog("Network", "DisplayInfo listener: 5G NSA/NR detected", LogLevel.INFO)
+                        }
+                    }
+                }
+                @Suppress("DEPRECATION")
+                tm.listen(listener, android.telephony.PhoneStateListener.LISTEN_DISPLAY_INFO_CHANGED)
+            }
+        } catch (e: Exception) {
+            addLog("Network", "DisplayInfo listener: ${e.message}", LogLevel.DEBUG)
         }
     }
 
